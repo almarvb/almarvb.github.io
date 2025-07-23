@@ -276,6 +276,24 @@
                 const tableRef = React.useRef();
 
                 const handlePrint = () => {
+                    // Clone the table DOM node
+                    const tableNode = tableRef.current.querySelector('table').cloneNode(true);
+
+                    // Remove the "Handling" column from the header
+                    tableNode.querySelectorAll('thead tr th:last-child').forEach(th => th.remove());
+                    // Remove the "Handling" cell from each row
+                    tableNode.querySelectorAll('tbody tr').forEach(tr => {
+                        tr.querySelectorAll('td:last-child').forEach(td => td.remove());
+                    });
+
+                    // Create a container for the heading and the modified table
+                    const container = document.createElement('div');
+                    const heading = document.createElement('h2');
+                    heading.className = "text-xl font-bold mb-4";
+                    heading.textContent = "Passasjerliste";
+                    container.appendChild(heading);
+                    container.appendChild(tableNode);
+
                     const printContents = tableRef.current.innerHTML;
                     const win = window.open('', '', 'height=700,width=900');
                     win.document.write('<html><head><title>Passasjerliste</title>');
@@ -302,22 +320,37 @@
                             </thead>
                             <tbody>
                                 {rows.map((row, idx) => (
-                                    <tr key={idx}>
-                                        <td className="border px-2 py-1">{row.ferry}</td>
-                                        <td className="border px-2 py-1">{row.timeSlot}</td>
-                                        <td className="border px-2 py-1">{row.passengerName}</td>
-                                        <td className="border px-2 py-1">
-                                            {(isAdmin || row.bookingUserId === userId) && (
-                                                <button
-                                                    className="px-2 py-1 bg-red-600 text-white rounded text-xs"
-                                                    onClick={() => handleDeleteBooking(row.bookingId)}
-                                                >
-                                                    Slett
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                    // Check if this row is the first of a new ferry or timeSlot
+                                    const prev = rows[idx - 1];
+                                    const isNewFerry = !prev || row.ferry !== prev.ferry;
+                                    const isNewTimeSlot = !prev || row.ferry !== prev.ferry || row.timeSlot !== prev.timeSlot;
+
+                                    // Add a thick border if new ferry or new timeSlot
+                                    let rowClass = "";
+                                    if (isNewFerry) {
+                                        rowClass = "border-t-4 border-indigo-300";
+                                    } else if (isNewTimeSlot) {
+                                        rowClass = "border-t-4 border-gray-200";
+                                    }
+
+                                    return (
+                                        <tr key={idx} className={rowClass}>
+                                            <td className="border px-2 py-1">{row.ferry}</td>
+                                            <td className="border px-2 py-1">{row.timeSlot}</td>
+                                            <td className="border px-2 py-1">{row.passengerName}</td>
+                                            <td className="border px-2 py-1">
+                                                {(isAdmin || row.bookingUserId === userId) && (
+                                                    <button
+                                                        className="px-2 py-1 bg-red-600 text-white rounded text-xs"
+                                                        onClick={() => handleDeleteBooking(row.bookingId)}
+                                                    >
+                                                        Slett
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                         <button
