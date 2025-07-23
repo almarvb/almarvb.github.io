@@ -332,27 +332,7 @@
                             <p className="mt-2 text-lg text-gray-600">
                                 Båt #1 (Sørkaia) kjører rundt Homborøya hele veien til vielsen. Denne båten er beregnet for de eldre og de som ikke kan gå over øya på sti. Er du ung og sprek, bruk Båt #2 (Nord på øya) – den har en kortere båttur, men du må gå på sti over øya til hytten.
                             </p>
-                            <div className="mt-4 flex justify-center items-center gap-2">
-                                {!isAdmin && (
-                                    <button
-                                        onClick={handleAdminLogin}
-                                        className="px-3 py-1 bg-indigo-600 text-white rounded text-sm"
-                                    >
-                                        Admin login
-                                    </button>
-                                )}
-                                {isAdmin && (
-                                    <>
-                                        <span className="text-green-700 font-bold">Admin</span>
-                                        <button
-                                            onClick={handleAdminLogout}
-                                            className="px-3 py-1 bg-gray-400 text-white rounded text-sm"
-                                        >
-                                            Logg ut
-                                        </button>
-                                    </>
-                                )}
-                            </div>
+                            
                         </header>
                         <div className="bg-white p-6 rounded-2xl shadow-lg">
                             <div className="mb-6">
@@ -444,6 +424,15 @@
                             <p>Ferry Booking System | Powered by Firebase & React</p>
                         </footer>
                     </div>
+                    {!isAdmin && (
+                        <button
+                            onClick={handleAdminLogin}
+                            className="fixed bottom-6 right-6 px-4 py-2 bg-indigo-600 text-white rounded shadow-lg opacity-70 hover:opacity-100 z-50"
+                            style={{ zIndex: 1000 }}
+                        >
+                            Admin login
+                        </button>
+        )}
                 </div>
             );
         }
