@@ -43,7 +43,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         // --- React Imports (already loaded via script tags) ---
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect } = React;
 
         // --- Firebase Configuration ---
         // IMPORTANT: Replace with your actual Firebase config from your Firebase project
@@ -77,12 +77,10 @@
             const [isAuthReady, setIsAuthReady] = useState(false);
             const [bookings, setBookings] = useState({});
             const [selectedFerry, setSelectedFerry] = useState('ferry1');
-            const [name, setName] = useState('');
-            const [showMyBookings, setShowMyBookings] = useState(false);
-            const [modalMessage, setModalMessage] = useState('');
             const [passengerCount, setPassengerCount] = useState(1);
             const [passengerNames, setPassengerNames] = useState(['']);
             const [showPassengerTable, setShowPassengerTable] = useState(false);
+            const [modalMessage, setModalMessage] = useState('');
 
             // --- Authentication ---
             useEffect(() => {
@@ -213,36 +211,6 @@
                 );
             };
 
-            // --- My Bookings Component ---
-            const MyBookings = () => {
-                const myBookingsList = [];
-                Object.values(bookings).flat().forEach(slotBookings => {
-                    slotBookings.forEach(booking => {
-                        if (booking.userId === userId) {
-                            myBookingsList.push(booking);
-                        }
-                    });
-                });
-                myBookingsList.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-                return (
-                    <div className="mt-8">
-                        <h2 className="text-2xl font-bold text-center text-gray-800 mb-4">My Bookings</h2>
-                        {myBookingsList.length > 0 ? (
-                            <ul className="space-y-2">
-                                {myBookingsList.map(booking => (
-                                    <li key={booking.id} className="p-3 bg-green-100 rounded-lg shadow-sm">
-                                        <p className="font-semibold">{FERRY_DETAILS[booking.ferryId].name} at {booking.timeSlot}</p>
-                                        <p className="text-sm text-gray-600">Booked by: {booking.userName}</p>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <p className="text-center text-gray-500">You have no bookings.</p>
-                        )}
-                    </div>
-                );
-            };
-
             const PassengerTable = () => {
                 // Flatten all bookings into a list of {ferryId, timeSlot, passengerName}
                 const rows = [];
@@ -316,93 +284,84 @@
     </p>
                         </header>
                         <div className="bg-white p-6 rounded-2xl shadow-lg">
-                            <div className="flex justify-center mb-6">
-                                <button onClick={() => setShowMyBookings(!showMyBookings)} className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-transform transform hover:scale-105">
-                                    {showMyBookings ? 'Show Schedules' : 'Mine reservasjoner'}
-                                </button>
-                            </div>
-                            {showMyBookings ? <MyBookings /> : (
-                                <>
-                                    <div className="mb-6">
-                                        <label htmlFor="passengerCount" className="block text-sm font-medium text-gray-700 mb-1">Antall passasjerer:</label>
+                            <div className="mb-6">
+                                <label htmlFor="passengerCount" className="block text-sm font-medium text-gray-700 mb-1">Antall passasjerer:</label>
+                                <input
+                                    type="number"
+                                    id="passengerCount"
+                                    min={1}
+                                    max={ferry.capacity}
+                                    value={passengerCount}
+                                    onChange={handlePassengerCountChange}
+                                    className="w-24 px-2 py-1 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-2"
+                                />
+                                {Array.from({ length: passengerCount }).map((_, idx) => (
+                                    <div key={idx} className="mt-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Navn på passasjer {idx + 1}:</label>
                                         <input
-                                            type="number"
-                                            id="passengerCount"
-                                            min={1}
-                                            max={ferry.capacity}
-                                            value={passengerCount}
-                                            onChange={handlePassengerCountChange}
-                                            className="w-24 px-2 py-1 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-2"
+                                            type="text"
+                                            value={passengerNames[idx] || ''}
+                                            onChange={e => handlePassengerNameChange(idx, e.target.value)}
+                                            placeholder={`Navn passasjer ${idx + 1}`}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
                                         />
-                                        {Array.from({ length: passengerCount }).map((_, idx) => (
-                                            <div key={idx} className="mt-2">
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Navn på passasjer {idx + 1}:</label>
-                                                <input
-                                                    type="text"
-                                                    value={passengerNames[idx] || ''}
-                                                    onChange={e => handlePassengerNameChange(idx, e.target.value)}
-                                                    placeholder={`Navn passasjer ${idx + 1}`}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-                                                />
-                                            </div>
-                                        ))}
                                     </div>
-                                    <div className="flex border-b border-gray-200 mb-6">
-                                        {Object.keys(FERRY_DETAILS).map(ferryId => (
-                                            <button
-                                                key={ferryId}
-                                                onClick={() => setSelectedFerry(ferryId)}
-                                                className={`flex-1 py-3 text-center font-semibold transition-colors duration-200 ${selectedFerry === ferryId ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-                                            >
-                                                {FERRY_DETAILS[ferryId].name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-center text-gray-800">{ferry.name}</h2>
-                                        <p className="text-center text-gray-500 mb-6">
+                                ))}
+                            </div>
+                            <div className="flex border-b border-gray-200 mb-6">
+                                {Object.keys(FERRY_DETAILS).map(ferryId => (
+                                    <button
+                                        key={ferryId}
+                                        onClick={() => setSelectedFerry(ferryId)}
+                                        className={`flex-1 py-3 text-center font-semibold transition-colors duration-200 ${selectedFerry === ferryId ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        {FERRY_DETAILS[ferryId].name}
+                                    </button>
+                                ))}
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-bold text-center text-gray-800">{ferry.name}</h2>
+                                <p className="text-center text-gray-500 mb-6">
     Kapasitet: {ferry.capacity} | Reisetid: {ferry.tripDuration / 2} min
 </p>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                            {ferryTimeSlots.map(slot => {
-                                                const slotBookings = bookings[selectedFerry]?.[slot] || [];
-                                                const bookedSeats = slotBookings.reduce((sum, b) => sum + (b.passengerCount || 1), 0);
-                                                const availableSlots = ferry.capacity - bookedSeats;
-                                                const isFull = availableSlots <= 0;
-                                                const userHasBooked = slotBookings.some(b => b.userId === userId);
-                                                return (
-                                                    <div
-                                                        key={slot}
-                                                        className={`p-4 rounded-lg text-center transition-all duration-300 ${
-                                                            isFull ? 'bg-gray-200' : 'bg-blue-100'
-                                                        }`}
-                                                    >
-                                                        <p
-                                                            className={`font-bold text-lg ${
-                                                                isFull ? 'text-gray-400 line-through' : 'text-gray-800'
-                                                            }`}
-                                                        >
-                                                            {slot}
-                                                        </p>
-                                                        <p className={`text-sm font-semibold ${isFull ? 'text-red-800' : 'text-blue-800'}`}>
-                                                            {availableSlots} / {ferry.capacity} ledige plasser
-                                                        </p>
-                                                        <button
-                                                            onClick={() => handleBooking(selectedFerry, slot)}
-                                                            disabled={isFull || !name.trim() || userHasBooked}
-                                                            className={`mt-3 w-full px-3 py-1.5 text-sm font-semibold text-white rounded-md shadow-sm transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed ${
-                                                                userHasBooked ? 'bg-green-600' : 'bg-indigo-600 hover:bg-indigo-700'
-                                                            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
-                                                        >
-                                                            {userHasBooked ? 'Booked' : (isFull ? 'Full' : 'Book')}
-                                                        </button>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </>
-                            )}
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    {ferryTimeSlots.map(slot => {
+                                        const slotBookings = bookings[selectedFerry]?.[slot] || [];
+                                        const bookedSeats = slotBookings.reduce((sum, b) => sum + (b.passengerCount || 1), 0);
+                                        const availableSlots = ferry.capacity - bookedSeats;
+                                        const isFull = availableSlots <= 0;
+                                        const userHasBooked = slotBookings.some(b => b.userId === userId);
+                                        return (
+                                            <div
+                                                key={slot}
+                                                className={`p-4 rounded-lg text-center transition-all duration-300 ${
+                                                    isFull ? 'bg-gray-200' : 'bg-blue-100'
+                                                }`}
+                                            >
+                                                <p
+                                                    className={`font-bold text-lg ${
+                                                        isFull ? 'text-gray-400 line-through' : 'text-gray-800'
+                                                    }`}
+                                                >
+                                                    {slot}
+                                                </p>
+                                                <p className={`text-sm font-semibold ${isFull ? 'text-red-800' : 'text-blue-800'}`}>
+                                                    {availableSlots} / {ferry.capacity} ledige plasser
+                                                </p>
+                                                <button
+                                                    onClick={() => handleBooking(selectedFerry, slot)}
+                                                    disabled={isFull || !name.trim() || userHasBooked}
+                                                    className={`mt-3 w-full px-3 py-1.5 text-sm font-semibold text-white rounded-md shadow-sm transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed ${
+                                                        userHasBooked ? 'bg-green-600' : 'bg-indigo-600 hover:bg-indigo-700'
+                                                    } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                                                >
+                                                    {userHasBooked ? 'Booked' : (isFull ? 'Full' : 'Book')}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                         <div className="flex justify-center mt-8">
                             <button
