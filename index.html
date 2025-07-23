@@ -208,10 +208,12 @@
 
             // --- Handle Delete Booking ---
            const handleDeleteBooking = async (bookingId) => {
+                console.log("Trying to delete booking:", bookingId); // Add this line
                 try {
                     const bookingRef = doc(db, `artifacts/${appId}/public/data/bookings`, bookingId);
                     await deleteDoc(bookingRef);
                 } catch (error) {
+                    console.error("Delete error:", error); // Add this line
                     setModalMessage('Kunne ikke slette booking. Prøv igjen.');
                 }
             };
