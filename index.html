@@ -71,9 +71,13 @@
             'ferry2': { name: 'Båt #2 Nord på øya', capacity: 7, tripDuration: 20 },
         };
 
-        // --- Main App Component ---
+        // --- Admin Email ---
+        const ADMIN_EMAIL = "your@email.com"; // CHANGE THIS TO YOUR EMAIL
+
         function App() {
             const [userId, setUserId] = useState(null);
+            const [userEmail, setUserEmail] = useState(null);
+            const [isAdmin, setIsAdmin] = useState(false);
             const [isAuthReady, setIsAuthReady] = useState(false);
             const [bookings, setBookings] = useState({});
             const [selectedFerry, setSelectedFerry] = useState('ferry1');
@@ -87,6 +91,8 @@
                 const unsubscribe = onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         setUserId(user.uid);
+                        setUserEmail(user.email || null);
+                        setIsAdmin(user.email === ADMIN_EMAIL);
                     } else {
                         try {
                             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -98,6 +104,8 @@
                             console.error("Error signing in:", error);
                             setModalMessage("Error connecting to the server. Please refresh.");
                         }
+                        setIsAdmin(false);
+                        setUserEmail(null);
                     }
                     setIsAuthReady(true);
                 });
@@ -198,11 +206,11 @@
                 }
             };
 
-            const handleDeleteBooking = async (bookingId) => {
+            // --- Handle Delete Booking ---
+           const handleDeleteBooking = async (bookingId) => {
                 try {
-                    const bookingsCol = collection(db, `artifacts/${appId}/public/data/bookings`);
-                    const bookingRef = bookingsCol.parent.doc(bookingId);
-                    await bookingRef.delete();
+                    const bookingRef = doc(db, `artifacts/${appId}/public/data/bookings`, bookingId);
+                    await deleteDoc(bookingRef);
                 } catch (error) {
                     setModalMessage('Kunne ikke slette booking. Prøv igjen.');
                 }
@@ -221,8 +229,22 @@
                 );
             };
 
-            const isAdmin = false; // <-- Set to true for admin users
+            // --- Admin Login/Logout ---
+            const handleAdminLogin = async () => {
+                const email = prompt("Admin e-post:");
+                const password = prompt("Admin passord:");
+                if (!email || !password) return;
+                try {
+                    await signInWithEmailAndPassword(auth, email, password);
+                } catch (e) {
+                    setModalMessage("Admin-innlogging feilet.");
+                }
+            };
+            const handleAdminLogout = async () => {
+                await signOut(auth);
+            };
 
+            // --- Passenger Table ---
             const PassengerTable = () => {
                 // Flatten all bookings into a list of {ferryId, timeSlot, passengerName, bookingId, userId}
                 const rows = [];
@@ -236,6 +258,7 @@
                                     passengerName,
                                     bookingId: booking.id,
                                     bookingUserId: booking.userId,
+                                    bookingUserEmail: booking.userEmail || null,
                                 });
                             });
                         });
@@ -305,8 +328,29 @@
                         <header className="text-center mb-8">
                             <h1 className="text-4xl font-extrabold text-gray-800 tracking-tight">Booking av båt til Homborøya</h1>
                             <p className="mt-2 text-lg text-gray-600">
-            Båt #1 (Sørkaia) kjører rundt Homborøya hele veien til vielsen. Denne båten er beregnet for de eldre og de som ikke kan gå over øya på sti. Er du ung og sprek, bruk Båt #2 (Nord på øya) – den har en kortere båttur, men du må gå på sti over øya til hytten.
-        </p>
+                                Båt #1 (Sørkaia) kjører rundt Homborøya hele veien til vielsen. Denne båten er beregnet for de eldre og de som ikke kan gå over øya på sti. Er du ung og sprek, bruk Båt #2 (Nord på øya) – den har en kortere båttur, men du må gå på sti over øya til hytten.
+                            </p>
+                            <div className="mt-4 flex justify-center items-center gap-2">
+                                {!isAdmin && (
+                                    <button
+                                        onClick={handleAdminLogin}
+                                        className="px-3 py-1 bg-indigo-600 text-white rounded text-sm"
+                                    >
+                                        Admin login
+                                    </button>
+                                )}
+                                {isAdmin && (
+                                    <>
+                                        <span className="text-green-700 font-bold">Admin</span>
+                                        <button
+                                            onClick={handleAdminLogout}
+                                            className="px-3 py-1 bg-gray-400 text-white rounded text-sm"
+                                        >
+                                            Logg ut
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </header>
                         <div className="bg-white p-6 rounded-2xl shadow-lg">
                             <div className="mb-6">
@@ -347,15 +391,14 @@
                             <div>
                                 <h2 className="text-2xl font-bold text-center text-gray-800">{ferry.name}</h2>
                                 <p className="text-center text-gray-500 mb-6">
-        Kapasitet: {ferry.capacity} | Reisetid: {ferry.tripDuration / 2} min
-    </p>
+                                    Kapasitet: {ferry.capacity} | Reisetid: {ferry.tripDuration / 2} min
+                                </p>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                     {ferryTimeSlots.map(slot => {
                                         const slotBookings = bookings[selectedFerry]?.[slot] || [];
                                         const bookedSeats = slotBookings.reduce((sum, b) => sum + (b.passengerCount || 1), 0);
                                         const availableSlots = ferry.capacity - bookedSeats;
                                         const isFull = availableSlots <= 0;
-                                        const userHasBooked = slotBookings.some(b => b.userId === userId);
                                         return (
                                             <div
                                                 key={slot}
@@ -400,11 +443,11 @@
                         </footer>
                     </div>
                 </div>
-            }
-            // --- 6. Render the App to the root element ---
-            const root = ReactDOM.createRoot(document.getElementById('root'));
-            root.render(<App />);
+            );
+        }
 
-        </script>
-    </body>
-    </html>
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
