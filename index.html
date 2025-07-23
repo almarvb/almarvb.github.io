@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ferry Booking System</title>
+    <!-- 1. Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. React and ReactDOM libraries -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- 3. Babel to transpile JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* A little extra style for the loader */
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- 4. The root element where our React app will be rendered -->
+    <div id="root">
+        <div style="display:flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; color: #333;">
+            <div class="loader"></div>
+            <p style="margin-top: 20px;">Loading Booking System...</p>
+        </div>
+    </div>
+
+    <!-- 5. The React application code -->
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // --- React Imports (already loaded via script tags) ---
+        const { useState, useEffect, useMemo } = React;
+
+        // --- Firebase Configuration ---
+        // IMPORTANT: Replace with your actual Firebase config from your Firebase project
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "YOUR_API_KEY_HERE", // <-- REMOVE THE REAL KEY
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID",
+            measurementId: "YOUR_MEASUREMENT_ID"
+        };
+
+        // --- App ID ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-ferry-booking-app';
+
+        // --- Initialize Firebase ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // --- Ferry Details ---
+        const FERRY_DETAILS = {
+            'ferry1': { name: 'Ferry #1 (West)', capacity: 8, tripDuration: 30 },
+            'ferry2': { name: 'Ferry #2 (East)', capacity: 7, tripDuration: 20 },
+        };
+
+        // --- Main App Component ---
+        function App() {
+            const [userId, setUserId] = useState(null);
+            const [isAuthReady, setIsAuthReady] = useState(false);
+            const [bookings, setBookings] = useState({});
+            const [selectedFerry, setSelectedFerry] = useState('ferry1');
+            const [name, setName] = useState('');
+            const [showMyBookings, setShowMyBookings] = useState(false);
+            const [modalMessage, setModalMessage] = useState('');
+
+            // --- Authentication ---
+            useEffect(() => {
+                const unsubscribe = onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        setUserId(user.uid);
+                    } else {
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Error signing in:", error);
+                            setModalMessage("Error connecting to the server. Please refresh.");
+                        }
+                    }
+                    setIsAuthReady(true);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            // --- Real-time Bookings Listener ---
+            useEffect(() => {
+                if (!isAuthReady) return;
+
+                const bookingsCol = collection(db, `artifacts/${appId}/public/data/bookings`);
+                const q = query(bookingsCol);
+
+                const unsubscribe = onSnapshot(q, (snapshot) => {
+                    const newBookings = {};
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const { ferryId, timeSlot } = data;
+                        if (!newBookings[ferryId]) newBookings[ferryId] = {};
+                        if (!newBookings[ferryId][timeSlot]) newBookings[ferryId][timeSlot] = [];
+                        newBookings[ferryId][timeSlot].push({ id: doc.id, ...data });
+                    });
+                    setBookings(newBookings);
+                }, (error) => {
+                    console.error("Error fetching bookings:", error);
+                    setModalMessage("Could not load booking data. Check your connection or Firebase setup.");
+                });
+
+                return () => unsubscribe();
+            }, [isAuthReady]);
+
+            // --- Time Slot Generation ---
+            const timeSlots = useMemo(() => {
+                const slots = {};
+                const now = new Date();
+                now.setSeconds(0, 0);
+
+                Object.keys(FERRY_DETAILS).forEach(ferryId => {
+                    const { tripDuration } = FERRY_DETAILS[ferryId];
+                    slots[ferryId] = [];
+                    let currentTime = new Date(now);
+
+                    const minutes = currentTime.getMinutes();
+                    const remainder = minutes % tripDuration;
+                    if (remainder !== 0) {
+                        currentTime.setMinutes(minutes + (tripDuration - remainder));
+                    }
+
+                    for (let i = 0; i < 24; i++) {
+                        const hours = String(currentTime.getHours()).padStart(2, '0');
+                        const minutes = String(currentTime.getMinutes()).padStart(2, '0');
+                        slots[ferryId].push(`${hours}:${minutes}`);
+                        currentTime.setMinutes(currentTime.getMinutes() + tripDuration);
+                    }
+                });
+                return slots;
+            }, []);
+
+            // --- Handle Booking ---
+            const handleBooking = async (ferryId, timeSlot) => {
+                if (!name.trim()) {
+                    setModalMessage('Please enter your name.');
+                    return;
+                }
+                if (!userId) {
+                    setModalMessage('Authentication not ready. Please wait.');
+                    return;
+                }
+
+                const ferry = FERRY_DETAILS[ferryId];
+                const currentBookings = bookings[ferryId]?.[timeSlot] || [];
+
+                if (currentBookings.length >= ferry.capacity) {
+                    setModalMessage('This time slot is already full.');
+                    return;
+                }
+
+                try {
+                    const bookingsCol = collection(db, `artifacts/${appId}/public/data/bookings`);
+                    await addDoc(bookingsCol, {
+                        ferryId,
+                        timeSlot,
+                        userName: name,
+                        userId,
+                        createdAt: new Date().toISOString(),
+                    });
+                    setName('');
+                } catch (error) {
+                    console.error("Error adding booking: ", error);
+                    setModalMessage('Failed to create booking. Please try again.');
+                }
+            };
+
+            // --- Modal Component ---
+            const Modal = ({ message, onClose }) => {
+                if (!message) return null;
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white p-6 rounded-lg shadow-xl text-center">
+                            <p className="mb-4">{message}</p>
+                            <button onClick={onClose} className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg">Close</button>
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- My Bookings Component ---
+            const MyBookings = () => {
+                const myBookingsList = [];
+                Object.values(bookings).flat().forEach(slotBookings => {
+                    slotBookings.forEach(booking => {
+                        if (booking.userId === userId) {
+                            myBookingsList.push(booking);
+                        }
+                    });
+                });
+                myBookingsList.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                return (
+                    <div className="mt-8">
+                        <h2 className="text-2xl font-bold text-center text-gray-800 mb-4">My Bookings</h2>
+                        {myBookingsList.length > 0 ? (
+                            <ul className="space-y-2">
+                                {myBookingsList.map(booking => (
+                                    <li key={booking.id} className="p-3 bg-green-100 rounded-lg shadow-sm">
+                                        <p className="font-semibold">{FERRY_DETAILS[booking.ferryId].name} at {booking.timeSlot}</p>
+                                        <p className="text-sm text-gray-600">Booked by: {booking.userName}</p>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-center text-gray-500">You have no bookings.</p>
+                        )}
+                    </div>
+                );
+            };
+
+            if (!isAuthReady) {
+                return null; // The initial loader is shown by the static HTML
+            }
+
+            const ferry = FERRY_DETAILS[selectedFerry];
+            const ferryTimeSlots = timeSlots[selectedFerry] || [];
+
+            return (
+                <div className="min-h-screen bg-gray-50 font-sans p-4 sm:p-6 lg:p-8">
+                    <Modal message={modalMessage} onClose={() => setModalMessage('')} />
+                    <div className="max-w-4xl mx-auto">
+                        <header className="text-center mb-8">
+                            <h1 className="text-4xl font-extrabold text-gray-800 tracking-tight">Ferry Booking System</h1>
+                            <p className="mt-2 text-lg text-gray-600">Real-time booking for island trips.</p>
+                            {userId && <p className="mt-2 text-sm text-gray-500 font-mono">Your User ID: {userId}</p>}
+                        </header>
+                        <div className="bg-white p-6 rounded-2xl shadow-lg">
+                            <div className="flex justify-center mb-6">
+                                <button onClick={() => setShowMyBookings(!showMyBookings)} className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-transform transform hover:scale-105">
+                                    {showMyBookings ? 'Show Schedules' : 'Show My Bookings'}
+                                </button>
+                            </div>
+                            {showMyBookings ? <MyBookings /> : (
+                                <>
+                                    <div className="mb-6">
+                                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+                                        <input
+                                            type="text"
+                                            id="name"
+                                            value={name}
+                                            onChange={(e) => setName(e.target.value)}
+                                            placeholder="Enter your name to book"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    <div className="flex border-b border-gray-200 mb-6">
+                                        {Object.keys(FERRY_DETAILS).map(ferryId => (
+                                            <button
+                                                key={ferryId}
+                                                onClick={() => setSelectedFerry(ferryId)}
+                                                className={`flex-1 py-3 text-center font-semibold transition-colors duration-200 ${selectedFerry === ferryId ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                            >
+                                                {FERRY_DETAILS[ferryId].name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-center text-gray-800">{ferry.name}</h2>
+                                        <p className="text-center text-gray-500 mb-6">Capacity: {ferry.capacity} | Trip Duration: {ferry.tripDuration} mins</p>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                            {ferryTimeSlots.map(slot => {
+                                                const slotBookings = bookings[selectedFerry]?.[slot] || [];
+                                                const availableSlots = ferry.capacity - slotBookings.length;
+                                                const isFull = availableSlots <= 0;
+                                                const userHasBooked = slotBookings.some(b => b.userId === userId);
+                                                return (
+                                                    <div key={slot} className={`p-4 rounded-lg text-center transition-all duration-300 ${isFull ? 'bg-red-200' : 'bg-blue-100'}`}>
+                                                        <p className="font-bold text-lg text-gray-800">{slot}</p>
+                                                        <p className={`text-sm font-semibold ${isFull ? 'text-red-800' : 'text-blue-800'}`}>
+                                                            {availableSlots} / {ferry.capacity} spots left
+                                                        </p>
+                                                        <button
+                                                            onClick={() => handleBooking(selectedFerry, slot)}
+                                                            disabled={isFull || !name.trim() || userHasBooked}
+                                                            className={`mt-3 w-full px-3 py-1.5 text-sm font-semibold text-white rounded-md shadow-sm transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed ${
+                                                                userHasBooked ? 'bg-green-600' : 'bg-indigo-600 hover:bg-indigo-700'
+                                                            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                                                        >
+                                                            {userHasBooked ? 'Booked' : (isFull ? 'Full' : 'Book')}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        <footer className="text-center mt-8 text-sm text-gray-400">
+                            <p>Ferry Booking System | Powered by Firebase & React</p>
+                        </footer>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 6. Render the App to the root element ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+    </script>
+</body>
+</html>
