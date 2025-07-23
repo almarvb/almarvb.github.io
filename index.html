@@ -350,7 +350,7 @@
                                                 </p>
                                                 <button
                                                     onClick={() => handleBooking(selectedFerry, slot)}
-                                                    disabled={isFull || !name.trim() || userHasBooked}
+                                                    disabled={isFull || passengerNames.some(n => !n.trim()) || userHasBooked}
                                                     className={`mt-3 w-full px-3 py-1.5 text-sm font-semibold text-white rounded-md shadow-sm transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed ${
                                                         userHasBooked ? 'bg-green-600' : 'bg-indigo-600 hover:bg-indigo-700'
                                                     } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
