@@ -275,37 +275,47 @@
                 });
                 const tableRef = React.useRef();
 
-                const handlePrint = () => {
-                    // Clone the table DOM node
-                    const tableNode = tableRef.current.querySelector('table').cloneNode(true);
+               const handlePrint = () => {
+                // 1. Clone the table DOM node to avoid modifying the one on screen
+                const tableNode = tableRef.current.querySelector('table').cloneNode(true);
 
-                    // Remove the "Handling" column from the header
-                    tableNode.querySelectorAll('thead tr th:last-child').forEach(th => th.remove());
-                    // Remove the "Handling" cell from each row
-                    tableNode.querySelectorAll('tbody tr').forEach(tr => {
-                        tr.querySelectorAll('td:last-child').forEach(td => td.remove());
-                    });
+                // 2. Remove the "Handling" column from the cloned header and body
+                tableNode.querySelector('thead tr th:last-child')?.remove();
+                tableNode.querySelectorAll('tbody tr').forEach(tr => {
+                    tr.querySelector('td:last-child')?.remove();
+                });
 
-                    // Create a container for the heading and the modified table
-                    const container = document.createElement('div');
-                    const heading = document.createElement('h2');
-                    heading.className = "text-xl font-bold mb-4";
-                    heading.textContent = "Passasjerliste";
-                    container.appendChild(heading);
-                    container.appendChild(tableNode);
+                // 3. Create a container for the heading and the MODIFIED table
+                const container = document.createElement('div');
+                const heading = document.createElement('h2');
+                heading.style.fontSize = "1.5rem"; // Add some basic styles
+                heading.style.fontWeight = "bold";
+                heading.style.marginBottom = "1rem";
+                heading.textContent = "Passasjerliste";
+                container.appendChild(heading);
+                container.appendChild(tableNode);
 
-                    const printContents = tableRef.current.innerHTML;
-                    const win = window.open('', '', 'height=700,width=900');
-                    win.document.write('<html><head><title>Passasjerliste</title>');
-                    win.document.write('<link rel="stylesheet" href="https://cdn.tailwindcss.com" />');
-                    win.document.write('</head><body>');
-                    win.document.write(printContents);
-                    win.document.write('</body></html>');
-                    win.document.close();
-                    win.focus();
+                // 4. Open the print window
+                const win = window.open('', '', 'height=700,width=900');
+
+                // 5. Write the necessary HTML structure and the CORRECT content to the window
+                win.document.write('<html><head><title>Passasjerliste</title>');
+                // Load Tailwind CSS for styling in the print window
+                win.document.write('<script src="https://cdn.tailwindcss.com"><\/script>'); 
+                win.document.write('</head><body style="padding: 20px;">');
+                // **THE FIX:** Use the outerHTML of the container you built
+                win.document.write(container.outerHTML);
+                win.document.write('</body></html>');
+
+                win.document.close(); // Important for some browsers
+                win.focus(); // Optional
+                
+                // Use a timeout to ensure styles are loaded before printing
+                setTimeout(() => {
                     win.print();
                     win.close();
-                };
+                }, 500); // 500ms delay
+            };
                 return (
                     <div ref={tableRef} className="overflow-x-auto my-8 bg-white p-4 rounded-lg shadow">
                         <h2 className="text-xl font-bold mb-4">Passasjerliste</h2>
@@ -319,7 +329,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {rows.map((row, idx) => (
+                                {rows.map((row, idx) => {
                                     // Check if this row is the first of a new ferry or timeSlot
                                     const prev = rows[idx - 1];
                                     const isNewFerry = !prev || row.ferry !== prev.ferry;
