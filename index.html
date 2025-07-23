@@ -80,6 +80,8 @@
             const [name, setName] = useState('');
             const [showMyBookings, setShowMyBookings] = useState(false);
             const [modalMessage, setModalMessage] = useState('');
+            const [passengerCount, setPassengerCount] = useState(1);
+            const [passengerNames, setPassengerNames] = useState(['']);
 
             // --- Authentication ---
             useEffect(() => {
@@ -138,10 +140,29 @@
                 ]
             };
 
+            const handlePassengerCountChange = (e) => {
+                const count = Math.max(1, Math.min(ferry.capacity, Number(e.target.value)));
+                setPassengerCount(count);
+                setPassengerNames(names => {
+                    const newNames = [...names];
+                    while (newNames.length < count) newNames.push('');
+                    while (newNames.length > count) newNames.pop();
+                    return newNames;
+                });
+            };
+
+            const handlePassengerNameChange = (idx, value) => {
+                setPassengerNames(names => {
+                    const newNames = [...names];
+                    newNames[idx] = value;
+                    return newNames;
+                });
+            };
+
             // --- Handle Booking ---
             const handleBooking = async (ferryId, timeSlot) => {
-                if (!name.trim()) {
-                    setModalMessage('Please enter your name.');
+                if (passengerNames.some(n => !n.trim())) {
+                    setModalMessage('Vennligst fyll inn alle navn.');
                     return;
                 }
                 if (!userId) {
@@ -151,9 +172,11 @@
 
                 const ferry = FERRY_DETAILS[ferryId];
                 const currentBookings = bookings[ferryId]?.[timeSlot] || [];
+                // Sum up all passengers in this slot
+                const bookedSeats = currentBookings.reduce((sum, b) => sum + (b.passengerCount || 1), 0);
 
-                if (currentBookings.length >= ferry.capacity) {
-                    setModalMessage('This time slot is already full.');
+                if (bookedSeats + passengerCount > ferry.capacity) {
+                    setModalMessage('Det er ikke nok ledige plasser i denne tidsluken.');
                     return;
                 }
 
@@ -162,11 +185,14 @@
                     await addDoc(bookingsCol, {
                         ferryId,
                         timeSlot,
-                        userName: name,
+                        userName: passengerNames.join(', '),
+                        passengerNames,
+                        passengerCount,
                         userId,
                         createdAt: new Date().toISOString(),
                     });
-                    setName('');
+                    setPassengerNames(['']);
+                    setPassengerCount(1);
                 } catch (error) {
                     console.error("Error adding booking: ", error);
                     setModalMessage('Failed to create booking. Please try again.');
@@ -242,15 +268,28 @@
                             {showMyBookings ? <MyBookings /> : (
                                 <>
                                     <div className="mb-6">
-                                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Fult navn:</label>
+                                        <label htmlFor="passengerCount" className="block text-sm font-medium text-gray-700 mb-1">Antall passasjerer:</label>
                                         <input
-                                            type="text"
-                                            id="name"
-                                            value={name}
-                                            onChange={(e) => setName(e.target.value)}
-                                            placeholder="Enter your name to book"
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                                            type="number"
+                                            id="passengerCount"
+                                            min={1}
+                                            max={ferry.capacity}
+                                            value={passengerCount}
+                                            onChange={handlePassengerCountChange}
+                                            className="w-24 px-2 py-1 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-2"
                                         />
+                                        {Array.from({ length: passengerCount }).map((_, idx) => (
+                                            <div key={idx} className="mt-2">
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Navn på passasjer {idx + 1}:</label>
+                                                <input
+                                                    type="text"
+                                                    value={passengerNames[idx] || ''}
+                                                    onChange={e => handlePassengerNameChange(idx, e.target.value)}
+                                                    placeholder={`Navn passasjer ${idx + 1}`}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                                                />
+                                            </div>
+                                        ))}
                                     </div>
                                     <div className="flex border-b border-gray-200 mb-6">
                                         {Object.keys(FERRY_DETAILS).map(ferryId => (
@@ -265,11 +304,14 @@
                                     </div>
                                     <div>
                                         <h2 className="text-2xl font-bold text-center text-gray-800">{ferry.name}</h2>
-                                        <p className="text-center text-gray-500 mb-6">Capacity: {ferry.capacity} | Trip Duration: {ferry.tripDuration} mins</p>
+                                        <p className="text-center text-gray-500 mb-6">
+    Kapasitet: {ferry.capacity} | Reisetid: {ferry.tripDuration / 2} min
+</p>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                             {ferryTimeSlots.map(slot => {
                                                 const slotBookings = bookings[selectedFerry]?.[slot] || [];
-                                                const availableSlots = ferry.capacity - slotBookings.length;
+                                                const bookedSeats = slotBookings.reduce((sum, b) => sum + (b.passengerCount || 1), 0);
+                                                const availableSlots = ferry.capacity - bookedSeats;
                                                 const isFull = availableSlots <= 0;
                                                 const userHasBooked = slotBookings.some(b => b.userId === userId);
                                                 return (
@@ -287,7 +329,7 @@
                                                             {slot}
                                                         </p>
                                                         <p className={`text-sm font-semibold ${isFull ? 'text-red-800' : 'text-blue-800'}`}>
-                                                            {availableSlots} / {ferry.capacity} spots left
+                                                            {availableSlots} / {ferry.capacity} ledige plasser
                                                         </p>
                                                         <button
                                                             onClick={() => handleBooking(selectedFerry, slot)}
